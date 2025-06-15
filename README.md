@@ -13,7 +13,5 @@ Dataset: https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer
 Referensi: https://github.com/atulapra/Emotion-detection
 
 Ubah bagian kode ini dengan direktori dataset untuk menjalankan program EmotionRecognition-v2.py:
-
-train_dir = r'C:\Users\LyonA\Downloads\archive\train'
-
-test_dir = r'C:\Users\LyonA\Downloads\archive\test'
+1. train_dir = r'C:\Users\LyonA\Downloads\archive\train'
+2. test_dir = r'C:\Users\LyonA\Downloads\archive\test'
