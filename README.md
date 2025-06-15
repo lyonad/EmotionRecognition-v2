@@ -5,17 +5,17 @@ Proyek ini mengimplementasikan sistem deteksi emosi real-time menggunakan kombin
 
 ----------------------------------------------------------------------------------------------------
 
-**- Cara Memulai Program Utama dengan Streamlit (Paling Mudah):**
+**Cara Memulai Program Utama dengan Streamlit (Paling Mudah):**
 1. Buka https://emotionrecognition-v2-gy7c24dme3usvggmpy6yqr.streamlit.app/
 2. Unggah emotion_model_v2.pkl yang sudah disimpan dari Github
 
-**- Cara Memulai Program Utama dengan app.py:**
+**Cara Memulai Program Utama dengan app.py:**
 1. Buka Terminal
 2. Masuk ke lokasi folder EmotionDetectionProject, lalu jalankan dengan "python -m streamlit run app.py"
 3. Atau Jalankan dengan "python -m streamlit run C:\Users\LyonA\Downloads\EmotionDetectionProject\app.py (lokasi app.py)"
 4. Unggah emotion_model_v2.pkl yang sudah disimpan dari Github
 
-**- Cara Melatih Model:**
+**Cara Melatih Model:**
 1. Buka EmotionRecognition-v2.py
 2. Ubah bagian kode ini dengan direktori dataset untuk menjalankan program EmotionRecognition-v2.py: 
 
