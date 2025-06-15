@@ -959,11 +959,9 @@ def main():
     <div class="footer">
         <p>Sistem Deteksi Emosi Real-time © 2025 | Dibangun dengan Streamlit dan OpenCV</p>
         <p>Dibuat oleh Kelompok 11:</p>
-        <ul>
-            <li>Lyon Ambrosio Djuanda / 2304130098</li>
-            <li>Rafa Afra Zahirah / 2304130099</li>
-            <li>Naufal Tipasha Denyana / 2304130115</li>
-        </ul>
+        <p>Lyon Ambrosio Djuanda / 2304130098<br>
+        Rafa Afra Zahirah / 2304130099<br>
+        Naufal Tipasha Denyana / 2304130115</p>
     </div>
     """, unsafe_allow_html=True)
 
