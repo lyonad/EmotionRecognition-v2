@@ -650,178 +650,118 @@ def main():
         if not st.session_state.model_loaded:
             st.warning("Silakan unggah model terlebih dahulu di sidebar")
         else:
-            interval = st.session_state.real_time_settings['detection_interval']
-            st.info(f"Tekan tombol 'Mulai Deteksi' di bawah untuk memulai deteksi menggunakan webcam")
-            st.warning(f"Hasil deteksi akan disimpan setiap {interval} detik")
-            
-            run = st.checkbox("Mulai Deteksi", key="run_detection")
-            stop_button = st.button("Berhenti", key="stop_detection")
-            
-            FRAME_WINDOW = st.image([], width=640)
-            status_text = st.empty()
-            stats_text = st.empty()
-            snapshot_placeholder = st.empty()
-            
-            # Inisialisasi webcam
-            cap = None
-            if run:
-                cap = cv2.VideoCapture(st.session_state.real_time_settings['camera_index'])
-                if not cap.isOpened():
-                    st.error("Tidak dapat mengakses webcam")
-                    run = False
-            
-            frame_count = 0
-            start_time = time.time()
-            last_save_time = time.time()  # Waktu terakhir penyimpanan
-            fps = 0
-            frame_skip_counter = 0
-            last_snapshot = None
-            
-            while run and not stop_button:
-                ret, frame = cap.read()
-                if not ret:
-                    status_text.error("Gagal mengambil frame dari webcam")
-                    break
-                
-                # Skip frame sesuai pengaturan
-                frame_skip_counter += 1
-                if frame_skip_counter < st.session_state.real_time_settings['frame_skip']:
-                    continue
-                frame_skip_counter = 0
-                
-                # Resize untuk performa
-                scale = st.session_state.real_time_settings['resolution']
-                if scale < 1.0:
-                    frame = cv2.resize(frame, None, fx=scale, fy=scale)
-                
-                # Proses frame
-                try:
-                    processed_frame, detected_faces = process_frame(
-                        frame.copy(), 
-                        st.session_state.knn, 
-                        st.session_state.pca, 
-                        st.session_state.scaler, 
-                        st.session_state.emotions, 
-                        st.session_state.face_cascade,
-                        st.session_state.show_probabilities
+            from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration
+            import av
+
+            # Deklarasi variabel model di luar kelas untuk diakses secara global
+            global_models = {
+                "knn": st.session_state.knn,
+                "pca": st.session_state.pca,
+                "scaler": st.session_state.scaler,
+                "emotions": st.session_state.emotions,
+                "face_cascade": st.session_state.face_cascade,
+                "show_probabilities": st.session_state.show_probabilities,
+                "real_time_settings": st.session_state.real_time_settings
+            }
+
+            class EmotionVideoTransformer(VideoTransformerBase):
+                def __init__(self):
+                    # Akses variabel global
+                    self.knn = global_models["knn"]
+                    self.pca = global_models["pca"]
+                    self.scaler = global_models["scaler"]
+                    self.emotions = global_models["emotions"]
+                    self.face_cascade = global_models["face_cascade"]
+                    self.show_probabilities = global_models["show_probabilities"]
+                    self.real_time_settings = global_models["real_time_settings"]
+                    
+                    self.last_update_time = time.time()
+                    self.detection_interval = self.real_time_settings['detection_interval']
+                    self.snapshot = None
+
+                def transform(self, frame):
+                    img = frame.to_ndarray(format="bgr24")
+                    
+                    # Proses frame dengan model
+                    processed_img, detected_faces = process_frame(
+                        img,
+                        self.knn,
+                        self.pca,
+                        self.scaler,
+                        self.emotions,
+                        self.face_cascade,
+                        self.show_probabilities
                     )
                     
-                    # Hitung FPS
-                    frame_count += 1
-                    elapsed_time = time.time() - start_time
-                    if elapsed_time > 0:
-                        fps = frame_count / elapsed_time
-                    
-                    # Tampilkan FPS
-                    fps_text = f"FPS: {fps:.2f}"
-                    cv2.putText(processed_frame, fps_text, (10, 30), 
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                    
-                    # Konversi warna untuk Streamlit
-                    processed_frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
-                    FRAME_WINDOW.image(processed_frame_rgb, channels="RGB")
-                    
-                    # Periksa apakah sudah waktunya menyimpan deteksi
+                    # Simpan snapshot secara periodik
                     current_time = time.time()
-                    detection_interval = st.session_state.real_time_settings['detection_interval']
-                    time_since_last_save = current_time - last_save_time
-                    
-                    # Simpan deteksi setiap interval tertentu
-                    if detected_faces and time_since_last_save >= detection_interval:
-                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        # Cari wajah dengan probabilitas tertinggi
+                    if detected_faces and (current_time - self.last_update_time) > self.detection_interval:
+                        self.last_update_time = current_time
                         main_face = max(detected_faces, key=lambda x: x['probability'])
-                        
-                        # Simpan snapshot
-                        snapshot_img = Image.fromarray(processed_frame_rgb.copy())
-                        
-                        # Simpan ke riwayat
-                        st.session_state.detection_history.insert(0, {
-                            "type": "video",
-                            "time": timestamp,
+                        self.snapshot = {
+                            "frame": processed_img.copy(),
+                            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             "emotion": main_face['emotion'],
-                            "probability": main_face['probability'],
-                            "all_probabilities": main_face['all_probabilities'],
-                            "image": snapshot_img.copy(),
-                            "interval": detection_interval
-                        })
-                        
-                        # Update waktu terakhir penyimpanan
-                        last_save_time = current_time
-                        
-                        # Simpan sebagai snapshot terakhir
-                        last_snapshot = {
-                            "frame": processed_frame_rgb.copy(),
-                            "timestamp": timestamp,
-                            "detections": detected_faces
+                            "probability": main_face['probability']
                         }
                     
-                    # Update status
-                    fps_status = ""
-                    if fps > 15:
-                        fps_status = "<span class='performance-badge performance-good'>Baik</span>"
-                    elif fps > 8:
-                        fps_status = "<span class='performance-badge performance-medium'>Sedang</span>"
-                    else:
-                        fps_status = "<span class='performance-badge performance-poor'>Lambat</span>"
+                    return processed_img
+
+            # Konfigurasi WebRTC
+            rtc_configuration = RTCConfiguration(
+                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+            )
+
+            ctx = webrtc_streamer(
+                key="emotion-detection",
+                video_transformer_factory=EmotionVideoTransformer,
+                rtc_configuration=rtc_configuration,
+                media_stream_constraints={"video": True, "audio": False},
+                async_transform=True
+            )
+
+            # Tampilkan dan simpan snapshot
+            if ctx.video_transformer:
+                if hasattr(ctx.video_transformer, 'snapshot') and ctx.video_transformer.snapshot:
+                    snapshot = ctx.video_transformer.snapshot
                     
-                    # Hitung waktu sampai penyimpanan berikutnya
-                    next_save = max(0, detection_interval - (current_time - last_save_time))
+                    # Simpan ke riwayat
+                    st.session_state.detection_history.insert(0, {
+                        "type": "video",
+                        "time": snapshot["time"],
+                        "emotion": snapshot["emotion"],
+                        "probability": snapshot["probability"],
+                        "image": Image.fromarray(cv2.cvtColor(snapshot["frame"], cv2.COLOR_BGR2RGB))
+                    })
                     
-                    status_text.markdown(f"""
-                    **Status Deteksi:**  
-                    - FPS: {fps:.2f} {fps_status}  
-                    - Wajah Terdeteksi: {len(detected_faces)}  
-                    - Penyimpanan berikutnya: {next_save:.1f} detik
-                    - Waktu: {datetime.now().strftime("%H:%M:%S")}
-                    """, unsafe_allow_html=True)
+                    # Tampilkan snapshot
+                    st.subheader("💾 Snapshot Terakhir")
+                    col1, col2 = st.columns(2)
                     
-                except Exception as e:
-                    status_text.error(f"Error dalam pemrosesan frame: {str(e)}")
-                    break
-                
-                # Reset penghitung FPS setiap detik
-                if elapsed_time > 1:
-                    frame_count = 0
-                    start_time = time.time()
-            
-            if cap is not None:
-                cap.release()
-            
-            if stop_button:
-                run = False
-                status_text.success("Deteksi dihentikan")
-                FRAME_WINDOW.image([])
-            
-            # Tombol untuk menyimpan snapshot terakhir
-            if last_snapshot is not None:
-                snapshot_placeholder.subheader("💾 Snapshot Terakhir")
-                snapshot_col1, snapshot_col2 = st.columns(2)
-                
-                with snapshot_col1:
-                    st.image(last_snapshot["frame"], caption=f"Snapshot - {last_snapshot['timestamp']}")
-                
-                with snapshot_col2:
-                    if last_snapshot["detections"]:
-                        st.markdown("**Deteksi Wajah:**")
-                        for i, face in enumerate(last_snapshot["detections"]):
-                            st.markdown(f"**Wajah #{i+1}:** {face['emotion']} ({face['probability']:.2f})")
-                
-                # Opsi unduh snapshot
-                snapshot_img = Image.fromarray(last_snapshot["frame"])
-                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
-                    snapshot_img.save(tmp_file, format='JPEG')
-                    tmp_file_path = tmp_file.name
-                
-                with open(tmp_file_path, "rb") as file:
-                    st.download_button(
-                        label="📥 Unduh Snapshot",
-                        data=file,
-                        file_name=f"snapshot_{last_snapshot['timestamp'].replace(':', '-')}.jpg",
-                        mime="image/jpeg",
-                        use_container_width=True
-                    )
+                    with col1:
+                        st.image(
+                            snapshot["frame"], 
+                            caption=f"Snapshot - {snapshot['time']}", 
+                            channels="BGR",
+                            use_column_width=True
+                        )
+                    
+                    with col2:
+                        st.markdown(f"**Emosi Dominan:** {snapshot['emotion']}")
+                        st.markdown(f"**Probabilitas:** {snapshot['probability']:.4f}")
+                        
+                        # Tombol unduh
+                        buf = cv2.imencode('.jpg', snapshot["frame"])[1].tobytes()
+                        st.download_button(
+                            label="📥 Unduh Snapshot",
+                            data=buf,
+                            file_name=f"snapshot_{snapshot['time'].replace(':', '-')}.jpg",
+                            mime="image/jpeg",
+                            use_container_width=True
+                        )
+                    
+                    # Reset snapshot setelah diproses
+                    ctx.video_transformer.snapshot = None
     
     with tab3:
         st.header("📊 Analisis Historis Deteksi")
