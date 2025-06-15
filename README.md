@@ -15,3 +15,8 @@ Referensi: https://github.com/atulapra/Emotion-detection
 Ubah bagian kode ini dengan direktori dataset untuk menjalankan program EmotionRecognition-v2.py:
 1. train_dir = r'C:\Users\LyonA\Downloads\archive\train'
 2. test_dir = r'C:\Users\LyonA\Downloads\archive\test'
+
+Proyek Akhir Mata Kuliah Artificial Intelligence Kelompok 11 yang Beranggotakan:
+1. Lyon Ambrosio Djuanda / 2304130098
+2. Rafa Afra Zahirah / 2304130099
+3. Naufal Tipasha Denyana / 2304130115
