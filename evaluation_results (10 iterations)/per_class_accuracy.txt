@@ -1,0 +1,7 @@
+angry: 0.2338 (224/958 correct)
+disgusted: 0.3243 (36/111 correct)
+fearful: 0.2812 (288/1024 correct)
+happy: 0.6268 (1112/1774 correct)
+neutral: 0.3804 (469/1233 correct)
+sad: 0.2743 (342/1247 correct)
+surprised: 0.5632 (468/831 correct)
