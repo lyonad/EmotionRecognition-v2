@@ -1,7 +1,7 @@
 # EmotionRecognition-v2
 Versi EmotionRecognition-v1 yang telah dikembangkan
 
-Proyek ini mengembangkan sistem pengenalan emosi secara real-time menggunakan Python, menerapkan algoritma K-Nearest Neighbors (KNN) untuk klasifikasi emosi. Algoritma Optimasi Pelican meningkatkan KNN dengan mengoptimalkan pemilihan fitur dan penyetelan untuk akurasi yang lebih baik. Sistem ini memproses data emosi secara real-time.
+Proyek ini mengimplementasikan sistem deteksi emosi real-time menggunakan kombinasi PCA, K-Nearest Neighbors (KNN), dan algoritma optimasi Pelican Optimization Algorithm (POA). Pertama, citra wajah dari dataset (FER-2013) dimuat, diubah ke skala abu-abu, diubah ukurannya menjadi 48x48 piksel, dan diratakan. Data kemudian dinormalisasi menggunakan `StandardScaler`. Bagian inti proyek adalah penggunaan POA untuk mengoptimalkan **parameter `k` dari KNN (jumlah tetangga terdekat), metode `weights` (bobot), dan `n_components` dari PCA (jumlah komponen utama untuk reduksi dimensi)**, dengan tujuan memaksimalkan akurasi klasifikasi. Setelah parameter optimal ditemukan, model KNN dilatih pada data yang telah direduksi dimensinya oleh PCA. Terakhir, model yang terlatih ini digunakan untuk mendeteksi emosi secara real-time dari tangkapan webcam, menampilkan emosi yang terdeteksi, probabilitas, dan matriks kebingungan.
 
 Cara Memulai Program: 
 1. Buka Terminal
