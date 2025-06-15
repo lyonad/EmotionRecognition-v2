@@ -5,6 +5,10 @@ Proyek ini mengimplementasikan sistem deteksi emosi real-time menggunakan kombin
 
 ----------------------------------------------------------------------------------------------------
 
+**Persiapan Program:**
+1. Install semua modul python yang diperlukan sesuai dengan requirements.txt
+2. Atau jalankan perintah ini di command prompt "pip install streamlit opencv-python numpy pillow pandas matplotlib seaborn plotly"
+
 **Cara Memulai Program Utama:**
 1. Buka Terminal
 2. Masuk ke lokasi folder EmotionDetectionProject, lalu jalankan dengan "python -m streamlit run app.py"
