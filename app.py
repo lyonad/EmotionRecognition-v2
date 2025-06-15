@@ -958,8 +958,8 @@ def main():
     st.markdown("""
     <div class="footer">
         <p>Sistem Deteksi Emosi Real-time © 2025 | Dibangun dengan Streamlit dan OpenCV</p>
-        <p>Dibuat oleh Kelompok 11:</p>
-        <p>Lyon Ambrosio Djuanda / 2304130098<br>
+        <p>Dibuat oleh Kelompok 11:<br>
+        Lyon Ambrosio Djuanda / 2304130098<br>
         Rafa Afra Zahirah / 2304130099<br>
         Naufal Tipasha Denyana / 2304130115</p>
     </div>
