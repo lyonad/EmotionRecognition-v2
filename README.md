@@ -3,10 +3,15 @@ Versi EmotionRecognition-v1 yang telah dikembangkan
 
 Proyek ini mengimplementasikan sistem deteksi emosi real-time menggunakan kombinasi PCA, K-Nearest Neighbors (KNN), dan algoritma optimasi Pelican Optimization Algorithm (POA). Pertama, citra wajah dari dataset (FER-2013) dimuat, diubah ke skala abu-abu, diubah ukurannya menjadi 48x48 piksel, dan diratakan. Data kemudian dinormalisasi menggunakan `StandardScaler`. Bagian inti proyek adalah penggunaan POA untuk mengoptimalkan **parameter `k` dari KNN (jumlah tetangga terdekat), metode `weights` (bobot), dan `n_components` dari PCA (jumlah komponen utama untuk reduksi dimensi)**, dengan tujuan memaksimalkan akurasi klasifikasi. Setelah parameter optimal ditemukan, model KNN dilatih pada data yang telah direduksi dimensinya oleh PCA. Terakhir, model yang terlatih ini digunakan untuk mendeteksi emosi secara real-time dari tangkapan webcam, menampilkan emosi yang terdeteksi, probabilitas, dan matriks kebingungan.
 
-Cara Memulai Program Utama: 
+Cara Memulai Program Utama dengan Streamlit: 
+1. Buka https://emotionrecognition-v2-gy7c24dme3usvggmpy6yqr.streamlit.app/
+2. Unggah emotion_model_v2.pkl yang sudah disimpan dari Github
+
+Cara Memulai Program Utama dengan app.py: 
 1. Buka Terminal
 2. Masuk ke lokasi folder EmotionDetectionProject, lalu jalankan dengan "python -m streamlit run app.py"
 3. Atau Jalankan dengan "python -m streamlit run C:\Users\LyonA\Downloads\EmotionDetectionProject\app.py (lokasi app.py)"
+4. Unggah emotion_model_v2.pkl yang sudah disimpan dari Github
 
 Cara Melatih Model:
 1. Buka EmotionRecognition-v2.py
@@ -16,7 +21,7 @@ Cara Melatih Model:
     
     test_dir = r'C:\Users\LyonA\Downloads\archive\test'
 
-3. Jalankan programnya
+3. Jalankan program
 
 Dataset: https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer
 
