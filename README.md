@@ -12,9 +12,9 @@ Cara Melatih Model:
 1. Buka EmotionRecognition-v2.py
 2. Ubah bagian kode ini dengan direktori dataset untuk menjalankan program EmotionRecognition-v2.py: 
 
-train_dir = r'C:\Users\LyonA\Downloads\archive\train'
+    train_dir = r'C:\Users\LyonA\Downloads\archive\train'
     
-test_dir = r'C:\Users\LyonA\Downloads\archive\test'
+    test_dir = r'C:\Users\LyonA\Downloads\archive\test'
 
 3. Jalankan programnya
 
@@ -22,9 +22,8 @@ Dataset: https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer
 
 Referensi: https://github.com/atulapra/Emotion-detection
 
-
-
 ----------------------------------------------------------------------------------------------------
+
 Proyek Akhir Artificial Intelligence - Kelompok 11:
 1. Lyon Ambrosio Djuanda / 2304130098
 2. Rafa Afra Zahirah / 2304130099
