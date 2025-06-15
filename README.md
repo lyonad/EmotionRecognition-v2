@@ -11,8 +11,11 @@ Cara Memulai Program Utama:
 Cara Melatih Model:
 1. Buka EmotionRecognition-v2.py
 2. Ubah bagian kode ini dengan direktori dataset untuk menjalankan program EmotionRecognition-v2.py: 
-    train_dir = r'C:\Users\LyonA\Downloads\archive\train'
-    test_dir = r'C:\Users\LyonA\Downloads\archive\test'
+
+train_dir = r'C:\Users\LyonA\Downloads\archive\train'
+    
+test_dir = r'C:\Users\LyonA\Downloads\archive\test'
+
 3. Jalankan programnya
 
 Dataset: https://www.kaggle.com/datasets/ananthu017/emotion-detection-fer
