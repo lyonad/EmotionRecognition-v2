@@ -650,216 +650,320 @@ def main():
         if not st.session_state.model_loaded:
             st.warning("Silakan unggah model terlebih dahulu di sidebar")
         else:
-            from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration
-            import av
+            interval = st.session_state.real_time_settings['detection_interval']
+            st.info(f"Tekan tombol 'Mulai Deteksi' di bawah untuk memulai deteksi menggunakan webcam")
+            st.warning(f"Hasil deteksi akan disimpan setiap {interval} detik")
             
-            # Konfigurasi WebRTC
-            RTC_CONFIGURATION = RTCConfiguration(
-                {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-            )
+            run = st.checkbox("Mulai Deteksi", key="run_detection")
+            stop_button = st.button("Berhenti", key="stop_detection")
             
-            class EmotionVideoTransformer(VideoTransformerBase):
-                def _init_(self):
-                    self.model_loaded = st.session_state.model_loaded
-                    self.knn = st.session_state.knn
-                    self.pca = st.session_state.pca
-                    self.scaler = st.session_state.scaler
-                    self.emotions = st.session_state.emotions
-                    self.face_cascade = st.session_state.face_cascade
-                    self.show_probabilities = st.session_state.show_probabilities
-                    self.last_update_time = time.time()
-                    self.detection_interval = st.session_state.real_time_settings['detection_interval']
-                    self.last_detected_faces = []
+            FRAME_WINDOW = st.image([], width=640)
+            status_text = st.empty()
+            stats_text = st.empty()
+            snapshot_placeholder = st.empty()
+            
+            # Inisialisasi webcam
+            cap = None
+            if run:
+                cap = cv2.VideoCapture(st.session_state.real_time_settings['camera_index'])
+                if not cap.isOpened():
+                    st.error("Tidak dapat mengakses webcam")
+                    run = False
+            
+            frame_count = 0
+            start_time = time.time()
+            last_save_time = time.time()  # Waktu terakhir penyimpanan
+            fps = 0
+            frame_skip_counter = 0
+            last_snapshot = None
+            
+            while run and not stop_button:
+                ret, frame = cap.read()
+                if not ret:
+                    status_text.error("Gagal mengambil frame dari webcam")
+                    break
                 
-                def transform(self, frame):
-                    img = frame.to_ndarray(format="bgr24")
-                    
-                    # Proses frame
+                # Skip frame sesuai pengaturan
+                frame_skip_counter += 1
+                if frame_skip_counter < st.session_state.real_time_settings['frame_skip']:
+                    continue
+                frame_skip_counter = 0
+                
+                # Resize untuk performa
+                scale = st.session_state.real_time_settings['resolution']
+                if scale < 1.0:
+                    frame = cv2.resize(frame, None, fx=scale, fy=scale)
+                
+                # Proses frame
+                try:
                     processed_frame, detected_faces = process_frame(
-                        img,
-                        self.knn,
-                        self.pca,
-                        self.scaler,
-                        self.emotions,
-                        self.face_cascade,
-                        self.show_probabilities
+                        frame.copy(), 
+                        st.session_state.knn, 
+                        st.session_state.pca, 
+                        st.session_state.scaler, 
+                        st.session_state.emotions, 
+                        st.session_state.face_cascade,
+                        st.session_state.show_probabilities
                     )
                     
-                    # Simpan deteksi secara berkala
+                    # Hitung FPS
+                    frame_count += 1
+                    elapsed_time = time.time() - start_time
+                    if elapsed_time > 0:
+                        fps = frame_count / elapsed_time
+                    
+                    # Tampilkan FPS
+                    fps_text = f"FPS: {fps:.2f}"
+                    cv2.putText(processed_frame, fps_text, (10, 30), 
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                    
+                    # Konversi warna untuk Streamlit
+                    processed_frame_rgb = cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB)
+                    FRAME_WINDOW.image(processed_frame_rgb, channels="RGB")
+                    
+                    # Periksa apakah sudah waktunya menyimpan deteksi
                     current_time = time.time()
-                    if detected_faces and current_time - self.last_update_time >= self.detection_interval:
-                        self.last_update_time = current_time
-                        self.last_detected_faces = detected_faces
-                        # Simpan ke session state
+                    detection_interval = st.session_state.real_time_settings['detection_interval']
+                    time_since_last_save = current_time - last_save_time
+                    
+                    # Simpan deteksi setiap interval tertentu
+                    if detected_faces and time_since_last_save >= detection_interval:
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        snapshot = Image.fromarray(cv2.cvtColor(processed_frame, cv2.COLOR_BGR2RGB))
+                        
+                        # Cari wajah dengan probabilitas tertinggi
+                        main_face = max(detected_faces, key=lambda x: x['probability'])
+                        
+                        # Simpan snapshot
+                        snapshot_img = Image.fromarray(processed_frame_rgb.copy())
+                        
+                        # Simpan ke riwayat
                         st.session_state.detection_history.insert(0, {
                             "type": "video",
                             "time": timestamp,
-                            "emotion": detected_faces[0]["emotion"],
-                            "probability": detected_faces[0]["probability"],
-                            "all_probabilities": detected_faces[0]["all_probabilities"],
-                            "image": snapshot,
-                            "interval": self.detection_interval
+                            "emotion": main_face['emotion'],
+                            "probability": main_face['probability'],
+                            "all_probabilities": main_face['all_probabilities'],
+                            "image": snapshot_img.copy(),
+                            "interval": detection_interval
                         })
-                    
-                    return av.VideoFrame.from_ndarray(processed_frame, format="bgr24")
-            
-            # Inisialisasi komponen webrtc
-            ctx = webrtc_streamer(
-                key="emotion-detection",
-                rtc_configuration=RTC_CONFIGURATION,
-                video_transformer_factory=EmotionVideoTransformer,
-                media_stream_constraints={"video": True, "audio": False},
-                async_processing=True,
-            )
-            
-            # Tampilkan status
-            if ctx.video_transformer:
-                if ctx.video_transformer.last_detected_faces:
-                    st.info(f"Deteksi terakhir: {ctx.video_transformer.last_detected_faces[0]['emotion']} ({ctx.video_transformer.last_detected_faces[0]['probability']:.2f})")
-        
-        with tab3:
-            st.header("📊 Analisis Historis Deteksi")
-            
-            if not st.session_state.detection_history:
-                st.info("Belum ada riwayat deteksi. Silakan gunakan fitur deteksi gambar atau real-time terlebih dahulu.")
-            else:
-                # Filter untuk deteksi video
-                video_detections = [d for d in st.session_state.detection_history if d.get('type') == 'video']
-                
-                # Statistik umum
-                st.subheader("📈 Statistik Umum")
-                col1, col2, col3 = st.columns(3)
-                
-                with col1:
-                    st.metric("Total Deteksi", len(st.session_state.detection_history))
-                
-                with col2:
-                    st.metric("Deteksi Gambar", len([d for d in st.session_state.detection_history if d['type'] == 'image']))
-                
-                with col3:
-                    st.metric("Deteksi Video", len(video_detections))
-                
-                # Statistik khusus video
-                if video_detections:
-                    st.subheader("📊 Statistik Deteksi Video")
-                    
-                    # Rata-rata interval
-                    intervals = [d.get('interval', 10) for d in video_detections]
-                    avg_interval = sum(intervals) / len(intervals)
-                    
-                    # Distribusi emosi
-                    emotions = [d['emotion'] for d in video_detections]
-                    emotion_counts = pd.Series(emotions).value_counts().reset_index()
-                    emotion_counts.columns = ['Emosi', 'Jumlah']
-                    
-                    cols = st.columns(2)
-                    with cols[0]:
-                        st.metric("Rata-rata Interval", f"{avg_interval:.1f} detik")
                         
-                    with cols[1]:
-                        # Emosi paling umum
-                        most_common_emotion = emotion_counts.iloc[0]['Emosi'] if not emotion_counts.empty else "N/A"
-                        st.metric("Emosi Paling Umum", most_common_emotion)
+                        # Update waktu terakhir penyimpanan
+                        last_save_time = current_time
+                        
+                        # Simpan sebagai snapshot terakhir
+                        last_snapshot = {
+                            "frame": processed_frame_rgb.copy(),
+                            "timestamp": timestamp,
+                            "detections": detected_faces
+                        }
                     
-                    # Grafik distribusi emosi untuk video
-                    fig = px.pie(
-                        emotion_counts, 
-                        names='Emosi', 
-                        values='Jumlah',
-                        hole=0.3,
-                        title='Distribusi Emosi (Deteksi Video)',
-                        color_discrete_sequence=px.colors.qualitative.Pastel
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+                    # Update status
+                    fps_status = ""
+                    if fps > 15:
+                        fps_status = "<span class='performance-badge performance-good'>Baik</span>"
+                    elif fps > 8:
+                        fps_status = "<span class='performance-badge performance-medium'>Sedang</span>"
+                    else:
+                        fps_status = "<span class='performance-badge performance-poor'>Lambat</span>"
                     
-                    # Riwayat deteksi video
-                    st.subheader("🕒 Riwayat Deteksi Video")
-                    st.info(f"Menampilkan {len(video_detections)} deteksi video yang tersimpan")
+                    # Hitung waktu sampai penyimpanan berikutnya
+                    next_save = max(0, detection_interval - (current_time - last_save_time))
                     
-                    for item in video_detections[:10]:
-                        with st.container():
-                            st.markdown(f"<div class='history-item'>", unsafe_allow_html=True)
-                            
-                            # Header
-                            st.markdown(f"""
-                            <div class='history-header'>
-                                <div>
-                                    <span class='history-emotion'>{item['emotion']}</span>
-                                    <span>({item['probability']:.2f})</span>
-                                </div>
-                                <div>
-                                    <small>{item['time']} | Interval: {item.get('interval', 10)} detik</small>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Konten
-                            cols = st.columns([1, 3])
-                            with cols[0]:
-                                st.image(item['image'], width=150)
-                            
-                            with cols[1]:
-                                # Tampilkan distribusi probabilitas
-                                prob_df = pd.DataFrame({
-                                    'Emosi': st.session_state.emotions,
-                                    'Probabilitas': item['all_probabilities']
-                                })
-                                fig = px.bar(
-                                    prob_df, 
-                                    x='Emosi', 
-                                    y='Probabilitas',
-                                    color='Emosi',
-                                    color_discrete_sequence=px.colors.qualitative.Pastel,
-                                    height=250
-                                )
-                                fig.update_layout(
-                                    showlegend=False,
-                                    margin=dict(l=0, r=0, t=30, b=0),
-                                    yaxis=dict(range=[0, 1])
-                                )
-                                st.plotly_chart(fig, use_container_width=True)
-                            
-                            # Tombol hapus
-                            if st.button("Hapus Deteksi", key=f"del_{item['time']}", use_container_width=True):
-                                st.session_state.detection_history = [
-                                    d for d in st.session_state.detection_history 
-                                    if not (d.get('time') == item['time'] and d.get('type') == 'video')
-                                ]
-                                st.experimental_rerun()
-                            
-                            st.markdown("</div>", unsafe_allow_html=True)
-                            st.divider()
-                else:
-                    st.info("Belum ada riwayat deteksi video. Hasil deteksi video disimpan setiap interval waktu tertentu selama deteksi real-time berjalan.")
+                    status_text.markdown(f"""
+                    **Status Deteksi:**  
+                    - FPS: {fps:.2f} {fps_status}  
+                    - Wajah Terdeteksi: {len(detected_faces)}  
+                    - Penyimpanan berikutnya: {next_save:.1f} detik
+                    - Waktu: {datetime.now().strftime("%H:%M:%S")}
+                    """, unsafe_allow_html=True)
+                    
+                except Exception as e:
+                    status_text.error(f"Error dalam pemrosesan frame: {str(e)}")
+                    break
                 
-                # Opsi ekspor data
-                if st.button("📤 Ekspor Data Historis ke CSV", use_container_width=True):
-                    history_df = pd.DataFrame(st.session_state.detection_history)
-                    
-                    # Hapus kolom gambar untuk CSV
-                    if 'image' in history_df.columns:
-                        history_df = history_df.drop(columns=['image'])
-                    
-                    csv = history_df.to_csv(index=False).encode('utf-8')
+                # Reset penghitung FPS setiap detik
+                if elapsed_time > 1:
+                    frame_count = 0
+                    start_time = time.time()
+            
+            if cap is not None:
+                cap.release()
+            
+            if stop_button:
+                run = False
+                status_text.success("Deteksi dihentikan")
+                FRAME_WINDOW.image([])
+            
+            # Tombol untuk menyimpan snapshot terakhir
+            if last_snapshot is not None:
+                snapshot_placeholder.subheader("💾 Snapshot Terakhir")
+                snapshot_col1, snapshot_col2 = st.columns(2)
+                
+                with snapshot_col1:
+                    st.image(last_snapshot["frame"], caption=f"Snapshot - {last_snapshot['timestamp']}")
+                
+                with snapshot_col2:
+                    if last_snapshot["detections"]:
+                        st.markdown("**Deteksi Wajah:**")
+                        for i, face in enumerate(last_snapshot["detections"]):
+                            st.markdown(f"**Wajah #{i+1}:** {face['emotion']} ({face['probability']:.2f})")
+                
+                # Opsi unduh snapshot
+                snapshot_img = Image.fromarray(last_snapshot["frame"])
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                    snapshot_img.save(tmp_file, format='JPEG')
+                    tmp_file_path = tmp_file.name
+                
+                with open(tmp_file_path, "rb") as file:
                     st.download_button(
-                        label="Unduh CSV",
-                        data=csv,
-                        file_name="riwayat_deteksi_emosi.csv",
-                        mime="text/csv",
+                        label="📥 Unduh Snapshot",
+                        data=file,
+                        file_name=f"snapshot_{last_snapshot['timestamp'].replace(':', '-')}.jpg",
+                        mime="image/jpeg",
                         use_container_width=True
                     )
+    
+    with tab3:
+        st.header("📊 Analisis Historis Deteksi")
         
-        st.markdown("""
-        <div class="footer">
-            <p>Sistem Deteksi Emosi Real-time © 2025 | Dibangun dengan Streamlit dan OpenCV</p>
-            <p>Dibuat oleh Kelompok 11:<br>
-            Lyon Ambrosio Djuanda / 2304130098<br>
-            Rafa Afra Zahirah / 2304130099<br>
-            Naufal Tipasha Denyana / 2304130115</p>
-        </div>
-        """, unsafe_allow_html=True)
+        if not st.session_state.detection_history:
+            st.info("Belum ada riwayat deteksi. Silakan gunakan fitur deteksi gambar atau real-time terlebih dahulu.")
+        else:
+            # Filter untuk deteksi video
+            video_detections = [d for d in st.session_state.detection_history if d.get('type') == 'video']
+            
+            # Statistik umum
+            st.subheader("📈 Statistik Umum")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Total Deteksi", len(st.session_state.detection_history))
+            
+            with col2:
+                st.metric("Deteksi Gambar", len([d for d in st.session_state.detection_history if d['type'] == 'image']))
+            
+            with col3:
+                st.metric("Deteksi Video", len(video_detections))
+            
+            # Statistik khusus video
+            if video_detections:
+                st.subheader("📊 Statistik Deteksi Video")
+                
+                # Rata-rata interval
+                intervals = [d.get('interval', 10) for d in video_detections]
+                avg_interval = sum(intervals) / len(intervals)
+                
+                # Distribusi emosi
+                emotions = [d['emotion'] for d in video_detections]
+                emotion_counts = pd.Series(emotions).value_counts().reset_index()
+                emotion_counts.columns = ['Emosi', 'Jumlah']
+                
+                cols = st.columns(2)
+                with cols[0]:
+                    st.metric("Rata-rata Interval", f"{avg_interval:.1f} detik")
+                    
+                with cols[1]:
+                    # Emosi paling umum
+                    most_common_emotion = emotion_counts.iloc[0]['Emosi'] if not emotion_counts.empty else "N/A"
+                    st.metric("Emosi Paling Umum", most_common_emotion)
+                
+                # Grafik distribusi emosi untuk video
+                fig = px.pie(
+                    emotion_counts, 
+                    names='Emosi', 
+                    values='Jumlah',
+                    hole=0.3,
+                    title='Distribusi Emosi (Deteksi Video)',
+                    color_discrete_sequence=px.colors.qualitative.Pastel
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Riwayat deteksi video
+                st.subheader("🕒 Riwayat Deteksi Video")
+                st.info(f"Menampilkan {len(video_detections)} deteksi video yang tersimpan")
+                
+                for item in video_detections[:10]:
+                    with st.container():
+                        st.markdown(f"<div class='history-item'>", unsafe_allow_html=True)
+                        
+                        # Header
+                        st.markdown(f"""
+                        <div class='history-header'>
+                            <div>
+                                <span class='history-emotion'>{item['emotion']}</span>
+                                <span>({item['probability']:.2f})</span>
+                            </div>
+                            <div>
+                                <small>{item['time']} | Interval: {item.get('interval', 10)} detik</small>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Konten
+                        cols = st.columns([1, 3])
+                        with cols[0]:
+                            st.image(item['image'], width=150)
+                        
+                        with cols[1]:
+                            # Tampilkan distribusi probabilitas
+                            prob_df = pd.DataFrame({
+                                'Emosi': st.session_state.emotions,
+                                'Probabilitas': item['all_probabilities']
+                            })
+                            fig = px.bar(
+                                prob_df, 
+                                x='Emosi', 
+                                y='Probabilitas',
+                                color='Emosi',
+                                color_discrete_sequence=px.colors.qualitative.Pastel,
+                                height=250
+                            )
+                            fig.update_layout(
+                                showlegend=False,
+                                margin=dict(l=0, r=0, t=30, b=0),
+                                yaxis=dict(range=[0, 1])
+                            )
+                            st.plotly_chart(fig, use_container_width=True)
+                        
+                        # Tombol hapus
+                        if st.button("Hapus Deteksi", key=f"del_{item['time']}", use_container_width=True):
+                            st.session_state.detection_history = [
+                                d for d in st.session_state.detection_history 
+                                if not (d.get('time') == item['time'] and d.get('type') == 'video')
+                            ]
+                            st.experimental_rerun()
+                        
+                        st.markdown("</div>", unsafe_allow_html=True)
+                        st.divider()
+            else:
+                st.info("Belum ada riwayat deteksi video. Hasil deteksi video disimpan setiap interval waktu tertentu selama deteksi real-time berjalan.")
+            
+            # Opsi ekspor data
+            if st.button("📤 Ekspor Data Historis ke CSV", use_container_width=True):
+                history_df = pd.DataFrame(st.session_state.detection_history)
+                
+                # Hapus kolom gambar untuk CSV
+                if 'image' in history_df.columns:
+                    history_df = history_df.drop(columns=['image'])
+                
+                csv = history_df.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Unduh CSV",
+                    data=csv,
+                    file_name="riwayat_deteksi_emosi.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+    
+    st.markdown("""
+    <div class="footer">
+        <p>Sistem Deteksi Emosi Real-time © 2025 | Dibangun dengan Streamlit dan OpenCV</p>
+        <p>Dibuat oleh Kelompok 11:<br>
+        Lyon Ambrosio Djuanda / 2304130098<br>
+        Rafa Afra Zahirah / 2304130099<br>
+        Naufal Tipasha Denyana / 2304130115</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
