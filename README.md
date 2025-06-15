@@ -1,5 +1,5 @@
 # EmotionRecognition-v2
-Improved version of EmotionRecognition-v1
+Versi EmotionRecognition-v1 yang telah dikembangkan
 
 Proyek ini mengembangkan sistem pengenalan emosi secara real-time menggunakan Python, menerapkan algoritma K-Nearest Neighbors (KNN) untuk klasifikasi emosi. Algoritma Optimasi Pelican meningkatkan KNN dengan mengoptimalkan pemilihan fitur dan penyetelan untuk akurasi yang lebih baik. Sistem ini memproses data emosi secara real-time.
 
